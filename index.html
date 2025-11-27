@@ -439,94 +439,154 @@
         </div>
     </div>
 
-  <script>
-  // Array de confirmações guardadas em memória (espelho do localStorage)
-  let confirmacoes = JSON.parse(localStorage.getItem('confirmacoes')) || [];
+ <script>
+        // Array para armazenar confirmações
+        let confirmacoes = JSON.parse(localStorage.getItem('confirmacoes')) || [];
 
-  // Função para atualizar o painel na tela
-  function atualizarPainel() {
-    const lista = document.getElementById('lista-confirmacoes');
-    const totalSpan = document.getElementById('total-confirmados');
-    const totalAdultosSpan = document.getElementById('total-adultos');
-    const totalCriancasSpan = document.getElementById('total-criancas');
+        // Função para calcular total de pessoas baseado no texto
+        function calcularPessoas(texto) {
+            let total = 0;
+            const textoLower = texto.toLowerCase();
+            
+            // Verificar se tem "casal"
+            if (textoLower.includes('casal')) {
+                total += 2;
+            } else if (textoLower.includes('sozinho') || textoLower.includes('sozinha')) {
+                total += 1;
+            } else {
+                total += 1; // padrão: 1 pessoa
+            }
+            
+            // Procurar números no texto (para filhos, crianças, etc)
+            const numeros = texto.match(/\d+/g);
+            if (numeros) {
+                numeros.forEach(num => {
+                    const numero = parseInt(num);
+                    // Se o número não for 1 (que pode ser do "1 casal"), adiciona
+                    if (numero > 1 || (numero === 1 && !textoLower.includes('1 casal'))) {
+                        // Verifica se o número está relacionado a filhos/crianças
+                        const palavrasFilhos = ['filho', 'filha', 'criança', 'crianca', 'bebe', 'bebê'];
+                        const temPalavraFilho = palavrasFilhos.some(palavra => textoLower.includes(palavra));
+                        
+                        if (temPalavraFilho || numero > 1) {
+                            total += numero;
+                        }
+                    }
+                });
+            }
+            
+            return total;
+        }
 
-    if (!lista) return;
+        // Contagem regressiva
+        function atualizarContagem() {
+            const dataCasamento = new Date('2026-01-17T13:30:00');
+            const agora = new Date();
+            const diferenca = dataCasamento - agora;
 
-    lista.innerHTML = '';
+            if (diferenca > 0) {
+                const dias = Math.floor(diferenca / (1000 * 60 * 60 * 24));
+                const horas = Math.floor((diferenca % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutos = Math.floor((diferenca % (1000 * 60 * 60)) / (1000 * 60));
+                const segundos = Math.floor((diferenca % (1000 * 60)) / 1000);
 
-    let totalPessoas = 0;
-    let totalAdultos = 0;
-    let totalCriancas = 0;
+                document.getElementById('contagemRegressiva').innerHTML = 
+                    `⏰ Faltam: <span class="tempo">${dias} dias, ${horas}h ${minutos}m ${segundos}s</span>`;
+            } else {
+                document.getElementById('contagemRegressiva').innerHTML = 
+                    '🎉 <span class="tempo">O grande dia chegou!</span> 🎉';
+            }
+        }
 
-    confirmacoes.forEach(item => {
-      const li = document.createElement('li');
-      li.textContent = `${item.nome} — Acompanhantes: ${item.acompanhantes || 0} — Crianças: ${item.criancas || 0}`;
-      lista.appendChild(li);
+        setInterval(atualizarContagem, 1000);
+        atualizarContagem();
 
-      const a = parseInt(item.acompanhantes || '0', 10);
-      const c = parseInt(item.criancas || '0', 10);
+        // Atualizar painel de confirmados
+        function atualizarPainel() {
+            const listaDiv = document.getElementById('listaConfirmados');
+            const totalDiv = document.getElementById('totalConfirmados');
+            
+            if (confirmacoes.length === 0) {
+                listaDiv.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">Ainda não há confirmações. Seja o primeiro a confirmar!</p>';
+                totalDiv.innerHTML = '<span class="numero">0</span> confirmações<br><span class="numero">0</span> pessoas no total';
+                return;
+            }
 
-      const adultos = 1 + (isNaN(a) ? 0 : a);
-      const criancas = isNaN(c) ? 0 : c;
+            // Calcular totais
+            const totalConfirmacoes = confirmacoes.length;
+            const totalPessoas = confirmacoes.reduce((total, conf) => {
+                return total + calcularPessoas(conf.acompanhantes);
+            }, 0);
 
-      totalAdultos += adultos;
-      totalCriancas += criancas;
-      totalPessoas += adultos + criancas;
-    });
+            totalDiv.innerHTML = `
+                <span class="numero">${totalConfirmacoes}</span> confirmações<br>
+                <span class="numero">${totalPessoas}</span> pessoas no total
+            `;
 
-    if (totalSpan) totalSpan.textContent = totalPessoas;
-    if (totalAdultosSpan) totalAdultosSpan.textContent = totalAdultos;
-    if (totalCriancasSpan) totalCriancasSpan.textContent = totalCriancas;
-  }
+            listaDiv.innerHTML = confirmacoes.map(conf => {
+                const numPessoas = calcularPessoas(conf.acompanhantes);
+                return `
+                    <div class="confirmado-item">
+                        <strong>👤 ${conf.nome}</strong><br>
+                        <span>🎭 ${conf.acompanhantes}</span><br>
+                        <span>👥 Total: ${numPessoas} ${numPessoas === 1 ? 'pessoa' : 'pessoas'}</span><br>
+                        <span>📞 ${conf.telefone}</span><br>
+                        <span style="font-size: 0.8em; color: #999;">⏰ Confirmado em: ${conf.data}</span>
+                    </div>
+                `;
+            }).reverse().join('');
+        }
 
-  // Função chamada ao clicar em "Confirmar presença"
-  function confirmarPresenca() {
-    const nomeInput = document.getElementById('nome');
-    const acompanhantesInput = document.getElementById('acompanhantes');
-    const criancasInput = document.getElementById('criancas');
+        // Formulário de confirmação
+        document.getElementById('formConfirmacao').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const nome = document.getElementById('nome').value;
+            const acompanhantes = document.getElementById('acompanhantes').value;
+            const telefone = document.getElementById('telefone').value;
 
-    const nome = nomeInput ? nomeInput.value.trim() : '';
-    const acompanhantesTexto = acompanhantesInput ? acompanhantesInput.value.trim() : '';
-    const criancasTexto = criancasInput ? criancasInput.value.trim() : '';
+            // Adicionar confirmação
+            const novaConfirmacao = {
+                nome: nome,
+                acompanhantes: acompanhantes,
+                telefone: telefone,
+                data: new Date().toLocaleString('pt-BR')
+            };
 
-    if (!nome) {
-      alert('Por favor, preencha o nome.');
-      return;
-    }
+            confirmacoes.push(novaConfirmacao);
+            localStorage.setItem('confirmacoes', JSON.stringify(confirmacoes));
 
-    // Tentar extrair números dentro dos textos (ex.: "1 casal e 3 filhos")
-    const numAcompanhantes = extrairNumero(acompanhantesTexto);
-    const numCriancas = extrairNumero(criancasTexto);
+            // Mostrar mensagem de sucesso
+            document.getElementById('mensagemSucesso').style.display = 'block';
+            
+            // Limpar formulário
+            this.reset();
 
-    const novaConfirmacao = {
-      nome: nome,
-      acompanhantes: isNaN(numAcompanhantes) ? 0 : numAcompanhantes,
-      criancas: isNaN(numCriancas) ? 0 : numCriancas
-    };
+            // Atualizar painel
+            atualizarPainel();
 
-    confirmacoes.push(novaConfirmacao);
-    localStorage.setItem('confirmacoes', JSON.stringify(confirmacoes));
+            // Esconder mensagem após 5 segundos
+            setTimeout(() => {
+                document.getElementById('mensagemSucesso').style.display = 'none';
+            }, 5000);
 
-    atualizarPainel();
+            // Scroll suave até o painel
+            document.querySelector('.painel-confirmados').scrollIntoView({ 
+                behavior: 'smooth' 
+            });
+        });
 
-    // Limpar campos
-    if (nomeInput) nomeInput.value = '';
-    if (acompanhantesInput) acompanhantesInput.value = '';
-    if (criancasInput) criancasInput.value = '';
+        // Carregar confirmações ao iniciar
+        atualizarPainel();
 
-    alert('Confirmação registrada com sucesso!');
-  }
-
-  // Extrai o primeiro número encontrado em um texto (ex.: "1 casal e 3 filhos" → 1)
-  function extrairNumero(texto) {
-    if (!texto) return NaN;
-    const match = texto.match(/\d+/);
-    return match ? parseInt(match[0], 10) : NaN;
-  }
-
-  // Carregar o painel quando a página abrir
-  window.addEventListener('load', atualizarPainel);
-</script>
-
+        // Atualizar painel a cada 5 segundos
+        setInterval(() => {
+            const novasConfirmacoes = JSON.parse(localStorage.getItem('confirmacoes')) || [];
+            if (novasConfirmacoes.length !== confirmacoes.length) {
+                confirmacoes = novasConfirmacoes;
+                atualizarPainel();
+            }
+        }, 5000);
+    </script>
 
 
