@@ -439,100 +439,94 @@
         </div>
     </div>
 
-    <script>
-  const API_URL = 'https://script.google.com/macros/s/AKfycbwY-R80XpGxQaWYNf0CKcoTHAlX_ChIHqrUhD5qE9WK3xqhy_2F7HRpuReQjxZwnNeO/exec';
+  <script>
+  // Array de confirmações guardadas em memória (espelho do localStorage)
+  let confirmacoes = JSON.parse(localStorage.getItem('confirmacoes')) || [];
 
-  async function enviarConfirmacao(nome, acompanhantesTexto, criancasTexto) {
-    const payload = {
-      nome: nome,
-      acompanhantes: acompanhantesTexto,
-      criancas: criancasTexto
-    };
+  // Função para atualizar o painel na tela
+  function atualizarPainel() {
+    const lista = document.getElementById('lista-confirmacoes');
+    const totalSpan = document.getElementById('total-confirmados');
+    const totalAdultosSpan = document.getElementById('total-adultos');
+    const totalCriancasSpan = document.getElementById('total-criancas');
 
-    try {
-      await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
+    if (!lista) return;
 
-      await carregarConfirmacoes();
-      alert('Confirmação enviada com sucesso!');
-    } catch (e) {
-      console.error('Erro ao enviar confirmação:', e);
-      alert('Ocorreu um erro ao enviar sua confirmação. Tente novamente.');
-    }
+    lista.innerHTML = '';
+
+    let totalPessoas = 0;
+    let totalAdultos = 0;
+    let totalCriancas = 0;
+
+    confirmacoes.forEach(item => {
+      const li = document.createElement('li');
+      li.textContent = `${item.nome} — Acompanhantes: ${item.acompanhantes || 0} — Crianças: ${item.criancas || 0}`;
+      lista.appendChild(li);
+
+      const a = parseInt(item.acompanhantes || '0', 10);
+      const c = parseInt(item.criancas || '0', 10);
+
+      const adultos = 1 + (isNaN(a) ? 0 : a);
+      const criancas = isNaN(c) ? 0 : c;
+
+      totalAdultos += adultos;
+      totalCriancas += criancas;
+      totalPessoas += adultos + criancas;
+    });
+
+    if (totalSpan) totalSpan.textContent = totalPessoas;
+    if (totalAdultosSpan) totalAdultosSpan.textContent = totalAdultos;
+    if (totalCriancasSpan) totalCriancasSpan.textContent = totalCriancas;
   }
 
-  async function carregarConfirmacoes() {
-    try {
-      const resp = await fetch(API_URL);
-      const dados = await resp.json();
-
-      const lista = document.getElementById('lista-confirmacoes');
-      const totalSpan = document.getElementById('total-confirmados');
-      const totalAdultosSpan = document.getElementById('total-adultos');
-      const totalCriancasSpan = document.getElementById('total-criancas');
-
-      if (!lista) return;
-
-      lista.innerHTML = '';
-
-      let totalPessoas = 0;
-      let totalAdultos = 0;
-      let totalCriancas = 0;
-
-      dados.forEach(item => {
-        const li = document.createElement('li');
-        li.textContent = `${item.nome} — Acompanhantes: ${item.acompanhantes || 0} — Crianças: ${item.criancas || 0}`;
-        lista.appendChild(li);
-
-        const a = parseInt(item.acompanhantes || '0', 10);
-        const c = parseInt(item.criancas || '0', 10);
-
-        const adultos = 1 + (isNaN(a) ? 0 : a);
-        const criancas = isNaN(c) ? 0 : c;
-
-        totalAdultos += adultos;
-        totalCriancas += criancas;
-        totalPessoas += adultos + criancas;
-      });
-
-      if (totalSpan) totalSpan.textContent = totalPessoas;
-      if (totalAdultosSpan) totalAdultosSpan.textContent = totalAdultos;
-      if (totalCriancasSpan) totalCriancasSpan.textContent = totalCriancas;
-
-    } catch (e) {
-      console.error('Erro ao carregar confirmações:', e);
-    }
-  }
-
+  // Função chamada ao clicar em "Confirmar presença"
   function confirmarPresenca() {
     const nomeInput = document.getElementById('nome');
     const acompanhantesInput = document.getElementById('acompanhantes');
     const criancasInput = document.getElementById('criancas');
 
     const nome = nomeInput ? nomeInput.value.trim() : '';
-    const acompanhantes = acompanhantesInput ? acompanhantesInput.value.trim() : '0';
-    const criancas = criancasInput ? criancasInput.value.trim() : '0';
+    const acompanhantesTexto = acompanhantesInput ? acompanhantesInput.value.trim() : '';
+    const criancasTexto = criancasInput ? criancasInput.value.trim() : '';
 
     if (!nome) {
       alert('Por favor, preencha o nome.');
       return;
     }
 
-    enviarConfirmacao(nome, acompanhantes, criancas);
+    // Tentar extrair números dentro dos textos (ex.: "1 casal e 3 filhos")
+    const numAcompanhantes = extrairNumero(acompanhantesTexto);
+    const numCriancas = extrairNumero(criancasTexto);
 
+    const novaConfirmacao = {
+      nome: nome,
+      acompanhantes: isNaN(numAcompanhantes) ? 0 : numAcompanhantes,
+      criancas: isNaN(numCriancas) ? 0 : numCriancas
+    };
+
+    confirmacoes.push(novaConfirmacao);
+    localStorage.setItem('confirmacoes', JSON.stringify(confirmacoes));
+
+    atualizarPainel();
+
+    // Limpar campos
     if (nomeInput) nomeInput.value = '';
     if (acompanhantesInput) acompanhantesInput.value = '';
     if (criancasInput) criancasInput.value = '';
+
+    alert('Confirmação registrada com sucesso!');
   }
 
-  window.addEventListener('load', carregarConfirmacoes);
+  // Extrai o primeiro número encontrado em um texto (ex.: "1 casal e 3 filhos" → 1)
+  function extrairNumero(texto) {
+    if (!texto) return NaN;
+    const match = texto.match(/\d+/);
+    return match ? parseInt(match[0], 10) : NaN;
+  }
+
+  // Carregar o painel quando a página abrir
+  window.addEventListener('load', atualizarPainel);
 </script>
-</body>
-</html>
+
 
 
